@@ -1,0 +1,60 @@
+# Dependencies
+**/node_modules/
+**/.pnp/
+**/.pnp.js
+
+# Logs
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+**/lerna-debug.log*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Env files (keep *.env.example tracked)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Build outputs
+**/dist/
+**/build/
+**/.turbo/
+**/.cache/
+
+# TypeScript build info
+**/*.tsbuildinfo
+
+# Vite / local tooling
+**/.vite/
+
+# Vercel
+**/.vercel/
+
+# Capacitor / mobile platform folders (generated)
+mercy-the-stylish-8/app/android/
+mercy-the-stylish-8/app/ios/
+mercy-the-stylish-8/app/www/
+
+# Android / Gradle artifacts
+**/.gradle/
+**/local.properties
+**/*.keystore
+**/*.jks
+**/*.aab
+**/*.apk
+
+# iOS / Xcode artifacts
+**/Pods/
+**/*.xcworkspace/
+**/*.xcodeproj/xcuserdata/
+**/*.xcuserstate
+**/DerivedData/
+

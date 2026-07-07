@@ -3,10 +3,16 @@ import { store } from "../store";
 import { renderShell } from "../components/layout";
 import { navigate } from "../router";
 
-export async function ProductPage(params: { id: string }) {
+export async function ProductPage(params: Record<string, string>) {
   renderShell("/", `<p>Loading product...</p>`);
   try {
-    const product = await api.getProduct(params.id);
+    const id = params.id;
+    if (!id) {
+      renderShell("/", `<p>Product not found.</p>`);
+      return;
+    }
+
+    const product = await api.getProduct(id);
     const maxQty = Math.max(product.stock, 0);
 
     renderShell(
