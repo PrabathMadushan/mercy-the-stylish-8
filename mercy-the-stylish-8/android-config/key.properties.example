@@ -1,0 +1,4 @@
+storeFile=../../release.keystore
+storePassword=your-keystore-password
+keyAlias=mercy-the-stylish
+keyPassword=your-key-password

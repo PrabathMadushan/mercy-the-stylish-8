@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  main-server:
+    build: ./server
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./server/.env
+    volumes:
+      - server-data:/app/data
+    restart: unless-stopped
+
+  ai-server:
+    build: ./ai-server
+    ports:
+      - "4100:4100"
+    env_file:
+      - ./ai-server/.env
+    restart: unless-stopped
+
+  web:
+    build: ./app
+    ports:
+      - "8080:80"
+    depends_on:
+      - main-server
+      - ai-server
+    restart: unless-stopped
+
+volumes:
+  server-data:

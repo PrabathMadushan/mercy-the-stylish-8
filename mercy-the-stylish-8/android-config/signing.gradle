@@ -1,0 +1,37 @@
+// android-config/signing.gradle
+//
+// This file is NOT meant to be pasted into build.gradle by hand. Instead,
+// copy it into app/android/app/signing.gradle and add one line to the end
+// of the (auto-generated) app/android/app/build.gradle:
+//
+//   apply from: 'signing.gradle'
+//
+// Gradle merges multiple `android { ... }` blocks across files, so this
+// adds a release signingConfig without you needing to hand-edit the
+// generated build.gradle - which matters because `npx cap add android`
+// regenerates build.gradle from scratch every time (including in CI, since
+// the android/ folder isn't committed to git). See .github/workflows/ci-cd.yml
+// (job "android") for how CI applies this automatically, and
+// SETUP-CREDENTIALS.md for the local-build equivalent.
+
+def keystorePropsFile = rootProject.file("key.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+
+android {
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("ANDROID_KEYSTORE_PATH") ?: (keystoreProps["storeFile"] ?: "release.keystore"))
+            storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: keystoreProps["storePassword"]
+            keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: keystoreProps["keyAlias"]
+            keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: keystoreProps["keyPassword"]
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+        }
+    }
+}

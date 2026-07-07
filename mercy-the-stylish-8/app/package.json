@@ -1,0 +1,34 @@
+{
+  "name": "mercy-the-stylish-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "cap:sync": "npx cap sync",
+    "cap:add:android": "npx cap add android",
+    "cap:add:ios": "npx cap add ios",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios",
+    "assets:generate": "capacitor-assets generate",
+    "test": "tsx --test test/*.test.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/preferences": "^6.0.2",
+    "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.1.2",
+    "typescript": "^5.5.4",
+    "tsx": "^4.16.5",
+    "vite": "^5.4.2"
+  }
+}
