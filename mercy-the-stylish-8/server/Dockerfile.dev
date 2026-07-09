@@ -9,7 +9,9 @@ COPY .npmrc package.json package-lock.json* ./
 COPY prisma.config.ts ./
 COPY prisma ./prisma
 
-# Install deps with retries; prisma is pinned to 6.x (Node 20 compatible)
+# prisma.config.ts requires DATABASE_URL for generate; no live DB connection during build
+ENV DATABASE_URL=postgresql://mercy:mercy@postgres:5432/mercy?schema=public
+
 RUN npm install || (sleep 5 && npm install) || (sleep 10 && npm install)
 
 RUN ./node_modules/.bin/prisma generate
