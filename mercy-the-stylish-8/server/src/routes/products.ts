@@ -4,10 +4,10 @@ import { productsDb } from "../db.js";
 import { requireAdmin, type AuthedRequest } from "../middleware/auth.js";
 import { productCreateSchema, productUpdateSchema, formatZodError } from "../validation.js";
 import { asyncHandler } from "../asyncHandler.js";
+import type { PaginatedProducts } from "../types.js";
 
 const router = Router();
 
-// GET /api/products?category=Dresses&search=floral
 router.get(
   "/",
   asyncHandler(async (req, res) => {
@@ -15,6 +15,8 @@ router.get(
 
     const category = typeof req.query.category === "string" ? req.query.category.trim().toLowerCase() : "";
     const search = typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || "20"), 10) || 20));
 
     if (category && category !== "all") {
       products = products.filter((p) => p.category.toLowerCase() === category);
@@ -25,7 +27,13 @@ router.get(
       );
     }
 
-    res.json(products);
+    const total = products.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const start = (page - 1) * limit;
+    const items = products.slice(start, start + limit);
+
+    const result: PaginatedProducts = { items, total, page, limit, totalPages };
+    res.json(result);
   })
 );
 
@@ -63,8 +71,6 @@ router.put(
     if (!parsed.success) {
       return res.status(400).json({ error: formatZodError(parsed.error) });
     }
-    // Only apply keys that were actually provided - guards against any key
-    // coming through as an explicit `undefined` overwriting existing data.
     const patch = Object.fromEntries(Object.entries(parsed.data).filter(([, v]) => v !== undefined));
     const updated = await productsDb.update(req.params.id, patch);
     if (!updated) return res.status(404).json({ error: "Product not found" });

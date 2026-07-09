@@ -1,107 +1,135 @@
-# Deployment & Build Guide (Vercel + Local)
+# Deployment Guide — Mercy the Stylish MVP
 
-This workspace is a wrapper folder. **The actual project code lives in `mercy-the-stylish-8/`** (monorepo).
+## Architecture
 
-## Project overview
+| Service | Stack | Deploy to |
+|---------|-------|-----------|
+| Frontend (`app/`) | React + Vite | Vercel |
+| Backend (`server/`) | Express + Prisma + PostgreSQL | Fly.io / Render / Railway / Docker |
+| Database | PostgreSQL 16 | Neon / Supabase / Docker Compose |
 
-Inside `mercy-the-stylish-8/`:
+**Not deployed for MVP:** `ai-server/`, Android/iOS
 
-- **`app/`**: Capacitor + **Vite** + TypeScript frontend (storefront + admin dashboard)
-- **`server/`**: Node/TypeScript/Express API (products, orders, Google token verification)
-- **`ai-server/`**: Node/TypeScript/Express AI API (stylist chat / recommendations)
+---
 
-Vercel is intended to deploy **only the static frontend** (`app/`). The two servers must run somewhere that can host Node processes (Docker on a VM, Fly.io/Render/Railway, etc.).
+## Local development
 
-## Local build & run
+### Option A — Docker (one command)
 
-From the monorepo root:
+From `mercy-the-stylish-8/`:
+
+```bash
+npm run docker:dev
+```
+
+This starts **Postgres**, the **API** (port 4000, hot reload), and the **Vite frontend** (port 5173, hot reload).
+
+- Frontend: http://localhost:5173
+- API: http://localhost:4000
+
+On first run, `server/.env` and `app/.env` are created from `.env.example` if missing. Edit them with your Google OAuth and Stripe keys.
+
+Stop:
+
+```bash
+npm run docker:dev:down
+```
+
+### Option B — without Docker
 
 ```bash
 cd mercy-the-stylish-8
 
-# install all three packages
+# Start PostgreSQL
+docker compose up postgres -d
+
+# Backend
+cd server
+cp .env.example .env   # fill in GOOGLE_CLIENT_ID, JWT_SECRET, ADMIN_EMAILS, Stripe keys
 npm install
-npm run install:all
+npx prisma db push
+npm run db:seed
+npm run dev            # http://localhost:4000
 
-# env files (fill values)
-cp server/.env.example server/.env
-cp ai-server/.env.example ai-server/.env
-cp app/.env.example app/.env
-
-# run all services together
-npm run dev
+# Frontend (new terminal)
+cd app
+cp .env.example .env   # fill VITE_MAIN_SERVER_URL, VITE_GOOGLE_CLIENT_ID
+npm install
+npm run dev            # http://localhost:5173
 ```
 
-Build all:
+---
+
+## Vercel (frontend)
+
+1. Set **Root Directory** to `app`
+2. Framework: Vite (auto-detected via `app/vercel.json`)
+3. Environment variables:
+   - `VITE_MAIN_SERVER_URL` — your deployed backend URL
+   - `VITE_GOOGLE_CLIENT_ID` — Google OAuth Web client ID
+   - `VITE_STRIPE_PUBLISHABLE_KEY` — Stripe publishable key
+
+`app/vercel.json` includes SPA rewrites for React Router.
+
+---
+
+## Backend deployment
+
+### Environment variables
+
+```env
+DATABASE_URL=postgresql://...
+GOOGLE_CLIENT_ID=...
+JWT_SECRET=...          # long random string
+ADMIN_EMAILS=you@example.com
+FRONTEND_URL=https://your-app.vercel.app
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PUBLISHABLE_KEY=pk_live_...
+```
+
+### Database setup
 
 ```bash
-cd mercy-the-stylish-8
-npm run build:all
+npx prisma migrate deploy
+npm run db:seed
 ```
 
-## Vercel deployment (frontend only: `app/`)
+### Stripe webhook
 
-### What Vercel should build
+Register endpoint: `https://your-api.com/api/webhooks/stripe`
 
-- **Root Directory**: `app`
-- **Framework**: Vite
-- **Install Command**: `npm install`
-- **Build Command**: `npm run build`
-- **Output Directory**: `dist`
+Events: `checkout.session.completed`
 
-This repo already includes `mercy-the-stylish-8/app/vercel.json`:
+---
 
-```json
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "vite",
-  "installCommand": "npm install",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist"
-}
+## Docker Compose (full stack)
+
+```bash
+docker compose up --build
 ```
 
-### Recommended setup (simplest)
+- Web: http://localhost:8080
+- API: http://localhost:4000
+- Postgres: localhost:5432
 
-In the Vercel dashboard:
+---
 
-1. Import the Git repo
-2. Go to **Settings → General → Root Directory**
-3. Set **Root Directory** to `app`
-4. Redeploy
+## Smoke test
 
-With Root Directory set to `app`, the `vercel.json` above is applied correctly and Vercel will run the right Vite commands.
+```bash
+npm run smoke-test
+```
 
-### If you cannot change Root Directory
+Verifies backend health and product listing endpoints.
 
-You can still deploy, but you must override Vercel’s Build settings so it builds the subfolder:
+---
 
-- **Install Command**: `cd app && npm install`
-- **Build Command**: `cd app && npm run build`
-- **Output Directory**: `app/dist`
+## MVP launch checklist
 
-### Common Vercel errors (and what they mean)
-
-- **`vite: command not found`**: Vercel is building from the wrong directory (not `app/`).
-- **It runs `astro build` (or another framework)**: the Vercel project has a manual override / wrong framework preset. Fix the project’s **Build & Development Settings** to use Vite and remove overrides.
-
-## Environment variables on Vercel
-
-Set these in **Vercel → Project → Settings → Environment Variables** (values come from `app/.env.example`):
-
-- **`VITE_MAIN_SERVER_URL`**: public URL of your deployed `server/` (example: `https://api.example.com`)
-- **`VITE_AI_SERVER_URL`**: public URL of your deployed `ai-server/`
-- **`VITE_GOOGLE_CLIENT_ID`**: Google OAuth Web Client ID
-
-Notes:
-
-- Vite env vars are baked in at build time. After changing env vars, **Redeploy** to apply them.
-- If the API URLs are wrong/unreachable, the web app will load but calls like product list, auth, orders, and AI chat will fail.
-
-## What to deploy where (quick checklist)
-
-- **Deploy to Vercel**: `mercy-the-stylish-8/app` (static site built to `dist/`)
-- **Deploy elsewhere (Node runtime required)**:
-  - `mercy-the-stylish-8/server` (Express API)
-  - `mercy-the-stylish-8/ai-server` (Express AI API)
-
+- [ ] Google OAuth configured for production domain
+- [ ] Stripe live/test keys set per environment
+- [ ] `ADMIN_EMAILS` configured
+- [ ] `FRONTEND_URL` matches Vercel domain (CORS)
+- [ ] Stripe webhook URL registered
+- [ ] `.gitignore` prevents `node_modules`/`.env` commits

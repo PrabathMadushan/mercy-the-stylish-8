@@ -6,6 +6,9 @@
   "scripts": {
     "install:all": "npm install --prefix server && npm install --prefix ai-server && npm install --prefix app",
     "dev": "concurrently -n server,ai-server,app -c blue,magenta,green \"npm run dev --prefix server\" \"npm run dev --prefix ai-server\" \"npm run dev --prefix app\"",
+    "docker:dev": "node scripts/docker-dev.mjs",
+    "docker:dev:down": "docker compose -f docker-compose.dev.yml down",
+    "docker:dev:logs": "docker compose -f docker-compose.dev.yml logs -f",
     "test:all": "npm test --prefix server && npm test --prefix ai-server && npm test --prefix app",
     "build:all": "npm run build --prefix server && npm run build --prefix ai-server && npm run build --prefix app",
     "smoke-test": "bash scripts/smoke-test.sh"

@@ -1,9 +1,5 @@
 import { z } from "zod";
 
-// .default() only kicks in when a key is missing/undefined - not when it's
-// present but empty (e.g. an unfilled form field sending ""). This helper
-// converts an empty string to undefined first, so .default() actually applies
-// instead of the field failing .min(1) validation.
 const optionalTrimmedString = (fallback: string) =>
   z.preprocess(
     (val) => (typeof val === "string" && val.trim() === "" ? undefined : val),
@@ -21,24 +17,22 @@ export const productCreateSchema = z.object({
 
 export const productUpdateSchema = productCreateSchema.partial();
 
-export const orderItemSchema = z.object({
+export const orderItemRequestSchema = z.object({
   productId: z.string().min(1),
-  name: z.string().min(1),
-  price: z.number().nonnegative(),
   quantity: z.number().int().positive()
 });
 
-export const orderCreateSchema = z.object({
-  userEmail: z.string().email().optional(),
-  items: z.array(orderItemSchema).min(1, "at least one item is required"),
-  total: z.number().nonnegative()
+export const checkoutSessionSchema = z.object({
+  items: z.array(orderItemRequestSchema).min(1, "at least one item is required"),
+  customerName: z.string().trim().min(1, "customer name is required"),
+  customerPhone: z.string().trim().min(1, "customer phone is required"),
+  shippingAddress: z.string().trim().min(1, "shipping address is required")
 });
 
 export const orderStatusSchema = z.object({
-  status: z.enum(["pending", "confirmed", "shipped", "delivered", "cancelled"])
+  status: z.enum(["pending_payment", "paid", "confirmed", "shipped", "delivered", "cancelled"])
 });
 
-/** Formats a ZodError into a short, user-friendly message. */
 export function formatZodError(error: z.ZodError): string {
   return error.issues.map((i) => `${i.path.join(".") || "value"}: ${i.message}`).join("; ");
 }

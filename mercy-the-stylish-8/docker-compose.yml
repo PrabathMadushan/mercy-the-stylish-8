@@ -1,14 +1,28 @@
 version: "3.9"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mercy
+      POSTGRES_PASSWORD: mercy
+      POSTGRES_DB: mercy
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   main-server:
     build: ./server
     ports:
       - "4000:4000"
     env_file:
       - ./server/.env
-    volumes:
-      - server-data:/app/data
+    environment:
+      DATABASE_URL: postgresql://mercy:mercy@postgres:5432/mercy?schema=public
+    depends_on:
+      - postgres
     restart: unless-stopped
 
   ai-server:
@@ -25,8 +39,7 @@ services:
       - "8080:80"
     depends_on:
       - main-server
-      - ai-server
     restart: unless-stopped
 
 volumes:
-  server-data:
+  postgres-data:

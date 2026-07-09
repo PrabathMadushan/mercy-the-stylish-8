@@ -1,103 +1,224 @@
-import { promises as fs } from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import type { Product, Order } from "./types.js";
+import type { OrderStatus } from "./generated/prisma/client.js";
+import { prisma } from "./lib/prisma.js";
+import { seedProducts } from "./data/seedProducts.js";
+import type { Product, Order, OrderItem } from "./types.js";
 
-// This is a small JSON-file datastore so the app runs with zero external
-// dependencies out of the box. For real production use, swap the read/write
-// functions below for a proper database (Postgres/Prisma is a natural fit -
-// see README.md "Going to production").
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "..", "data");
-const PRODUCTS_FILE = path.join(DATA_DIR, "products.json");
-const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
-
-async function ensureFile(file: string, defaultData: unknown) {
-  try {
-    await fs.access(file);
-  } catch {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(file, JSON.stringify(defaultData, null, 2));
-  }
+function mapProduct(p: {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  imageUrl: string;
+  description: string;
+  stock: number;
+  createdAt: Date;
+}): Product {
+  return {
+    id: p.id,
+    name: p.name,
+    price: p.price,
+    category: p.category,
+    imageUrl: p.imageUrl,
+    description: p.description,
+    stock: p.stock,
+    createdAt: p.createdAt.toISOString()
+  };
 }
 
-const seedProducts: Product[] = [
-  {
-    id: "seed-1",
-    name: "Floral Wrap Dress",
-    price: 120000,
-    category: "Dresses",
-    imageUrl: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=600",
-    description: "A breezy floral wrap dress, perfect for daytime events.",
-    stock: 8,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: "seed-2",
-    name: "Chic Denim Jacket",
-    price: 95000,
-    category: "Outerwear",
-    imageUrl: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600",
-    description: "A classic denim jacket that pairs with everything.",
-    stock: 5,
-    createdAt: new Date().toISOString()
-  }
-];
+function mapOrder(o: {
+  id: string;
+  userEmail: string;
+  customerName: string | null;
+  customerPhone: string | null;
+  shippingAddress: string | null;
+  total: number;
+  status: OrderStatus;
+  stripeSessionId: string | null;
+  createdAt: Date;
+  items: { productId: string; name: string; price: number; quantity: number }[];
+}): Order {
+  return {
+    id: o.id,
+    userEmail: o.userEmail,
+    customerName: o.customerName ?? undefined,
+    customerPhone: o.customerPhone ?? undefined,
+    shippingAddress: o.shippingAddress ?? undefined,
+    total: o.total,
+    status: o.status,
+    stripeSessionId: o.stripeSessionId ?? undefined,
+    createdAt: o.createdAt.toISOString(),
+    items: o.items.map((i) => ({
+      productId: i.productId,
+      name: i.name,
+      price: i.price,
+      quantity: i.quantity
+    }))
+  };
+}
 
 export async function initDb() {
-  await ensureFile(PRODUCTS_FILE, seedProducts);
-  await ensureFile(ORDERS_FILE, []);
-}
-
-async function readJson<T>(file: string): Promise<T> {
-  const raw = await fs.readFile(file, "utf-8");
-  return JSON.parse(raw) as T;
-}
-
-async function writeJson<T>(file: string, data: T) {
-  await fs.writeFile(file, JSON.stringify(data, null, 2));
+  const count = await prisma.product.count();
+  if (count === 0) {
+    await prisma.product.createMany({ data: seedProducts });
+  }
 }
 
 export const productsDb = {
-  all: () => readJson<Product[]>(PRODUCTS_FILE),
-  find: async (id: string) => (await readJson<Product[]>(PRODUCTS_FILE)).find((p) => p.id === id),
+  all: async () => {
+    const rows = await prisma.product.findMany({ orderBy: { createdAt: "desc" } });
+    return rows.map(mapProduct);
+  },
+  find: async (id: string) => {
+    const row = await prisma.product.findUnique({ where: { id } });
+    return row ? mapProduct(row) : undefined;
+  },
   create: async (product: Product) => {
-    const all = await readJson<Product[]>(PRODUCTS_FILE);
-    all.push(product);
-    await writeJson(PRODUCTS_FILE, all);
-    return product;
+    const row = await prisma.product.create({
+      data: {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        category: product.category,
+        imageUrl: product.imageUrl,
+        description: product.description,
+        stock: product.stock,
+        createdAt: new Date(product.createdAt)
+      }
+    });
+    return mapProduct(row);
   },
   update: async (id: string, patch: Partial<Product>) => {
-    const all = await readJson<Product[]>(PRODUCTS_FILE);
-    const idx = all.findIndex((p) => p.id === id);
-    if (idx === -1) return null;
-    all[idx] = { ...all[idx], ...patch };
-    await writeJson(PRODUCTS_FILE, all);
-    return all[idx];
+    try {
+      const row = await prisma.product.update({
+        where: { id },
+        data: {
+          ...(patch.name !== undefined && { name: patch.name }),
+          ...(patch.price !== undefined && { price: patch.price }),
+          ...(patch.category !== undefined && { category: patch.category }),
+          ...(patch.imageUrl !== undefined && { imageUrl: patch.imageUrl }),
+          ...(patch.description !== undefined && { description: patch.description }),
+          ...(patch.stock !== undefined && { stock: patch.stock })
+        }
+      });
+      return mapProduct(row);
+    } catch {
+      return null;
+    }
   },
   remove: async (id: string) => {
-    const all = await readJson<Product[]>(PRODUCTS_FILE);
-    const next = all.filter((p) => p.id !== id);
-    await writeJson(PRODUCTS_FILE, next);
-    return next.length !== all.length;
-  }
+    try {
+      await prisma.product.delete({ where: { id } });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  count: () => prisma.product.count(),
+  lowStock: (threshold = 3) =>
+    prisma.product.count({ where: { stock: { lte: threshold } } })
 };
 
 export const ordersDb = {
-  all: () => readJson<Order[]>(ORDERS_FILE),
+  all: async () => {
+    const rows = await prisma.order.findMany({
+      include: { items: true },
+      orderBy: { createdAt: "desc" }
+    });
+    return rows.map((o) =>
+      mapOrder({
+        ...o,
+        items: o.items.map((i) => ({
+          productId: i.productId,
+          name: i.name,
+          price: i.price,
+          quantity: i.quantity
+        }))
+      })
+    );
+  },
+  find: async (id: string) => {
+    const row = await prisma.order.findUnique({ include: { items: true }, where: { id } });
+    if (!row) return null;
+    return mapOrder({
+      ...row,
+      items: row.items.map((i) => ({
+        productId: i.productId,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity
+      }))
+    });
+  },
+  findByStripeSession: async (stripeSessionId: string) => {
+    const row = await prisma.order.findUnique({
+      include: { items: true },
+      where: { stripeSessionId }
+    });
+    if (!row) return null;
+    return mapOrder({
+      ...row,
+      items: row.items.map((i) => ({
+        productId: i.productId,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity
+      }))
+    });
+  },
   create: async (order: Order) => {
-    const all = await readJson<Order[]>(ORDERS_FILE);
-    all.push(order);
-    await writeJson(ORDERS_FILE, all);
-    return order;
+    const row = await prisma.order.create({
+      data: {
+        id: order.id,
+        userEmail: order.userEmail,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        shippingAddress: order.shippingAddress,
+        total: order.total,
+        status: order.status,
+        stripeSessionId: order.stripeSessionId,
+        createdAt: new Date(order.createdAt),
+        items: {
+          create: order.items.map((item: OrderItem) => ({
+            productId: item.productId,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity
+          }))
+        }
+      },
+      include: { items: true }
+    });
+    return mapOrder({
+      ...row,
+      items: row.items.map((i) => ({
+        productId: i.productId,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity
+      }))
+    });
   },
   update: async (id: string, patch: Partial<Order>) => {
-    const all = await readJson<Order[]>(ORDERS_FILE);
-    const idx = all.findIndex((o) => o.id === id);
-    if (idx === -1) return null;
-    all[idx] = { ...all[idx], ...patch };
-    await writeJson(ORDERS_FILE, all);
-    return all[idx];
+    try {
+      const row = await prisma.order.update({
+        where: { id },
+        data: {
+          ...(patch.status !== undefined && { status: patch.status }),
+          ...(patch.stripeSessionId !== undefined && { stripeSessionId: patch.stripeSessionId })
+        },
+        include: { items: true }
+      });
+      return mapOrder({
+        ...row,
+        items: row.items.map((i) => ({
+          productId: i.productId,
+          name: i.name,
+          price: i.price,
+          quantity: i.quantity
+        }))
+      });
+    } catch {
+      return null;
+    }
   }
 };

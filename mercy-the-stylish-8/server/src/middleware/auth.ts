@@ -1,20 +1,44 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { env, getAdminEmails } from "../config/env.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
+export interface AuthedUser {
+  email: string;
+  name?: string;
+  isAdmin: boolean;
+}
 
 export interface AuthedRequest extends Request {
-  user?: { email: string; name?: string; isAdmin: boolean };
+  user?: AuthedUser;
+}
+
+function resolveAdmin(email: string): boolean {
+  return getAdminEmails().includes(email.toLowerCase());
 }
 
 export function optionalAuth(req: AuthedRequest, _res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (header?.startsWith("Bearer ")) {
     try {
-      req.user = jwt.verify(header.slice(7), JWT_SECRET) as AuthedRequest["user"];
+      const payload = jwt.verify(header.slice(7), env.JWT_SECRET) as {
+        email: string;
+        name?: string;
+      };
+      req.user = {
+        email: payload.email.toLowerCase(),
+        name: payload.name,
+        isAdmin: resolveAdmin(payload.email)
+      };
     } catch {
-      // ignore invalid/expired token - endpoint decides whether auth is required
+      // invalid token — endpoint decides if auth is required
     }
+  }
+  next();
+}
+
+export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: "Sign in required" });
   }
   next();
 }

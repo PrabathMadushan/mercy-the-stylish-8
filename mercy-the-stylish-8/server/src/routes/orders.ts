@@ -1,73 +1,32 @@
 import { Router } from "express";
-import { v4 as uuid } from "uuid";
-import { ordersDb, productsDb } from "../db.js";
-import { requireAdmin, type AuthedRequest } from "../middleware/auth.js";
-import { orderCreateSchema, orderStatusSchema, formatZodError } from "../validation.js";
+import { ordersDb } from "../db.js";
+import { requireAdmin, requireAuth, type AuthedRequest } from "../middleware/auth.js";
+import { orderStatusSchema, formatZodError } from "../validation.js";
 import { asyncHandler } from "../asyncHandler.js";
+import { restoreStock } from "../services/orderService.js";
 
 const router = Router();
 
-// Admins see every order; signed-in customers see only their own.
 router.get(
   "/",
+  requireAuth,
   asyncHandler(async (req: AuthedRequest, res) => {
-    if (!req.user) return res.status(401).json({ error: "Sign in required" });
     const all = await ordersDb.all();
-    const visible = req.user.isAdmin ? all : all.filter((o) => o.userEmail === req.user!.email);
+    const visible = req.user!.isAdmin ? all : all.filter((o) => o.userEmail === req.user!.email);
     res.json(visible);
   })
 );
 
-router.post(
-  "/",
+router.get(
+  "/:id",
+  requireAuth,
   asyncHandler(async (req: AuthedRequest, res) => {
-    if (!req.user) return res.status(401).json({ error: "Sign in required" });
-
-    const parsed = orderCreateSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: formatZodError(parsed.error) });
+    const order = await ordersDb.find(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (!req.user!.isAdmin && order.userEmail !== req.user!.email) {
+      return res.status(403).json({ error: "You do not have access to this order" });
     }
-    const { items, total, userEmail } = parsed.data;
-
-    // Aggregate by productId first - if the same product appears more than
-    // once in `items` (a duplicate line item), we must check/decrement the
-    // TOTAL requested quantity, not each line independently. Checking each
-    // line against the current (undecremented) stock would let duplicate
-    // lines bypass the shortage check and push stock negative.
-    const requestedByProduct = new Map<string, number>();
-    for (const item of items) {
-      requestedByProduct.set(item.productId, (requestedByProduct.get(item.productId) ?? 0) + item.quantity);
-    }
-
-    const shortages: string[] = [];
-    for (const [productId, requestedQty] of requestedByProduct) {
-      const product = await productsDb.find(productId);
-      if (!product) {
-        shortages.push(`One of the items in this order is no longer available`);
-      } else if (product.stock < requestedQty) {
-        shortages.push(`Only ${product.stock} left of ${product.name} (requested ${requestedQty})`);
-      }
-    }
-    if (shortages.length) {
-      return res.status(409).json({ error: shortages.join("; ") });
-    }
-
-    for (const [productId, requestedQty] of requestedByProduct) {
-      const product = await productsDb.find(productId);
-      if (product) {
-        await productsDb.update(product.id, { stock: product.stock - requestedQty });
-      }
-    }
-
-    const order = await ordersDb.create({
-      id: uuid(),
-      userEmail: userEmail || req.user.email,
-      items,
-      total,
-      status: "pending",
-      createdAt: new Date().toISOString()
-    });
-    res.status(201).json(order);
+    res.json(order);
   })
 );
 
@@ -79,8 +38,22 @@ router.put(
     if (!parsed.success) {
       return res.status(400).json({ error: formatZodError(parsed.error) });
     }
-    const updated = await ordersDb.update(req.params.id, { status: parsed.data.status });
-    if (!updated) return res.status(404).json({ error: "Order not found" });
+
+    const existing = await ordersDb.find(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Order not found" });
+
+    const newStatus = parsed.data.status;
+    const wasPaid =
+      existing.status === "paid" ||
+      existing.status === "confirmed" ||
+      existing.status === "shipped" ||
+      existing.status === "delivered";
+
+    if (newStatus === "cancelled" && wasPaid) {
+      await restoreStock(existing.items);
+    }
+
+    const updated = await ordersDb.update(req.params.id, { status: newStatus });
     res.json(updated);
   })
 );

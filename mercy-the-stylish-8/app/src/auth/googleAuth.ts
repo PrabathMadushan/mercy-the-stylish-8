@@ -1,43 +1,62 @@
-import { GoogleAuth } from "@codetrix-studio/capacitor-google-auth";
-import { api, saveSession } from "../api";
-import type { User } from "../types";
+import { api } from "../lib/api";
 
-let initialized = false;
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 
-export function initGoogleAuth() {
-  if (initialized) return;
-  // On native (Android/iOS), Capacitor injects the config from capacitor.config.ts
-  // automatically. In a browser (e.g. `npm run dev`), the plugin needs the client ID
-  // passed explicitly here - that's what VITE_GOOGLE_CLIENT_ID is for.
-  const webClientId = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
-  GoogleAuth.initialize({
-    clientId: webClientId,
-    scopes: ["profile", "email"],
-    grantOfflineAccess: true
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential: string }) => void;
+          }) => void;
+          prompt: () => void;
+        };
+      };
+    };
+  }
+}
+
+function waitForGoogle(): Promise<typeof window.google> {
+  return new Promise((resolve, reject) => {
+    if (window.google?.accounts?.id) {
+      resolve(window.google);
+      return;
+    }
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      if (window.google?.accounts?.id) {
+        clearInterval(interval);
+        resolve(window.google);
+      } else if (attempts > 50) {
+        clearInterval(interval);
+        reject(new Error("Google Sign-In failed to load"));
+      }
+    }, 100);
   });
-  initialized = true;
 }
 
-/**
- * Signs the user in with Google, sends the ID token to the main server for
- * verification, and stores the returned session (JWT + profile) locally.
- */
-export async function signInWithGoogle(): Promise<User> {
-  initGoogleAuth();
-  const googleUser = await GoogleAuth.signIn();
-  const idToken = googleUser.authentication.idToken;
-  if (!idToken) {
-    throw new Error("Google did not return an ID token. Check your OAuth client configuration.");
+export async function signInWithGoogle() {
+  if (!GOOGLE_CLIENT_ID) {
+    throw new Error("VITE_GOOGLE_CLIENT_ID is not configured");
   }
-  const user = await api.loginWithGoogle(idToken);
-  await saveSession(user);
-  return user;
-}
 
-export async function signOutOfGoogle() {
-  try {
-    await GoogleAuth.signOut();
-  } catch {
-    // ignore - user may not have an active native session (e.g. web dev mode)
-  }
+  const google = await waitForGoogle();
+
+  return new Promise<Awaited<ReturnType<typeof api.loginWithGoogle>>>((resolve, reject) => {
+    google!.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: async (response) => {
+        try {
+          const user = await api.loginWithGoogle(response.credential);
+          resolve(user);
+        } catch (err) {
+          reject(err);
+        }
+      }
+    });
+    google!.accounts.id.prompt();
+  });
 }

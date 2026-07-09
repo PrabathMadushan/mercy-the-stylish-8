@@ -26,6 +26,7 @@ Thumbs.db
 # Build outputs
 **/dist/
 **/build/
+**/src/generated/
 **/.turbo/
 **/.cache/
 

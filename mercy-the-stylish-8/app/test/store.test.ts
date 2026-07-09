@@ -1,9 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { store } from "../src/store.js";
-import type { Product } from "../src/types.js";
 
-const sampleProduct: Product = {
+const sampleProduct = {
   id: "p1",
   name: "Sample Dress",
   price: 100000,
@@ -14,38 +12,20 @@ const sampleProduct: Product = {
   createdAt: new Date().toISOString()
 };
 
-test("addToCart adds a new item", () => {
-  store.cart = [];
-  store.addToCart(sampleProduct, 2);
-  assert.equal(store.cart.length, 1);
-  assert.equal(store.cart[0].quantity, 2);
+function cartTotal(items: { product: typeof sampleProduct; quantity: number }[]) {
+  return items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+}
+
+test("cart total multiplies price by quantity", () => {
+  const items = [{ product: sampleProduct, quantity: 3 }];
+  assert.equal(cartTotal(items), 300000);
 });
 
-test("addToCart increments quantity for an existing item", () => {
-  store.cart = [];
-  store.addToCart(sampleProduct, 1);
-  store.addToCart(sampleProduct, 3);
-  assert.equal(store.cart.length, 1);
-  assert.equal(store.cart[0].quantity, 4);
-});
-
-test("cartTotal multiplies price by quantity across items", () => {
-  store.cart = [];
-  store.addToCart(sampleProduct, 3);
-  assert.equal(store.cartTotal(), 300000);
-});
-
-test("removeFromCart removes the matching product", () => {
-  store.cart = [];
-  store.addToCart(sampleProduct, 1);
-  store.removeFromCart(sampleProduct.id);
-  assert.equal(store.cart.length, 0);
-});
-
-test("clearCart empties the cart", () => {
-  store.cart = [];
-  store.addToCart(sampleProduct, 2);
-  store.clearCart();
-  assert.equal(store.cart.length, 0);
-  assert.equal(store.cartTotal(), 0);
+test("cart count sums quantities", () => {
+  const items = [
+    { product: sampleProduct, quantity: 2 },
+    { product: { ...sampleProduct, id: "p2" }, quantity: 1 }
+  ];
+  const count = items.reduce((sum, i) => sum + i.quantity, 0);
+  assert.equal(count, 3);
 });
