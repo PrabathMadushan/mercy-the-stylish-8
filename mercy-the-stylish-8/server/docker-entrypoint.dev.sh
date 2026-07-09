@@ -1,12 +1,16 @@
 #!/bin/sh
 set -e
 
-# Use locally installed binaries — never `npx prisma` (that can pull Prisma 7 on Node 20)
 PRISMA="./node_modules/.bin/prisma"
 TSX="./node_modules/.bin/tsx"
 
 if [ ! -x "$PRISMA" ]; then
   echo "ERROR: prisma not installed. Rebuild the image: npm run docker:dev"
+  exit 1
+fi
+
+if ! "$PRISMA" --version 2>/dev/null | grep -q "prisma *: 7\."; then
+  echo "ERROR: Prisma 7 required (found stale node_modules). Run: npm run docker:dev:reset"
   exit 1
 fi
 
@@ -26,8 +30,6 @@ if [ "$ok" -eq 0 ]; then
   exit 1
 fi
 
-echo "==> Seeding products (if needed)"
-"$TSX" prisma/seed.ts
-
-echo "==> Starting API server (hot reload)"
-exec npm run dev
+echo "==> Starting API server"
+# No tsx watch in Docker — bind mounts on Windows make restarts very slow.
+exec "$TSX" src/index.ts

@@ -5,6 +5,14 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
+# Copy app source into the image (avoids slow Windows bind mounts breaking Vite)
+COPY index.html vite.config.ts tailwind.config.js postcss.config.js tsconfig.json ./
+COPY public ./public
+COPY src ./src
+
+COPY docker-entrypoint.dev.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 5173
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+ENTRYPOINT ["/entrypoint.sh"]

@@ -1,5 +1,5 @@
-import type { OrderStatus } from "./generated/prisma/client.js";
-import { prisma } from "./lib/prisma.js";
+import type { OrderStatus, Prisma } from "./generated/prisma/client.js";
+import { prisma, warmDbConnection } from "./lib/prisma.js";
 import { seedProducts } from "./data/seedProducts.js";
 import type { Product, Order, OrderItem } from "./types.js";
 
@@ -57,13 +57,56 @@ function mapOrder(o: {
 }
 
 export async function initDb() {
+  await warmDbConnection();
   const count = await prisma.product.count();
   if (count === 0) {
     await prisma.product.createMany({ data: seedProducts });
   }
 }
 
+function buildProductWhere(filters?: { category?: string; search?: string }): Prisma.ProductWhereInput {
+  const where: Prisma.ProductWhereInput = {};
+
+  const category = filters?.category?.trim();
+  if (category && category.toLowerCase() !== "all") {
+    where.category = { equals: category, mode: "insensitive" };
+  }
+
+  const search = filters?.search?.trim();
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { description: { contains: search, mode: "insensitive" } }
+    ];
+  }
+
+  return where;
+}
+
 export const productsDb = {
+  list: async (filters?: { category?: string; search?: string; page?: number; limit?: number }) => {
+    const page = Math.max(1, filters?.page ?? 1);
+    const limit = Math.min(50, Math.max(1, filters?.limit ?? 20));
+    const where = buildProductWhere(filters);
+
+    const [rows, total] = await prisma.$transaction([
+      prisma.product.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit
+      }),
+      prisma.product.count({ where })
+    ]);
+
+    return {
+      items: rows.map(mapProduct),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit))
+    };
+  },
   all: async () => {
     const rows = await prisma.product.findMany({ orderBy: { createdAt: "desc" } });
     return rows.map(mapProduct);

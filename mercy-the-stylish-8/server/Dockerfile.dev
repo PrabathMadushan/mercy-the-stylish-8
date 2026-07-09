@@ -16,6 +16,8 @@ RUN npm install || (sleep 5 && npm install) || (sleep 10 && npm install)
 
 RUN ./node_modules/.bin/prisma generate
 
+COPY tsconfig.json ./
+COPY src ./src
 COPY docker-entrypoint.dev.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

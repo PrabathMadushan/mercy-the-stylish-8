@@ -11,28 +11,17 @@ const router = Router();
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    let products = await productsDb.all();
-
-    const category = typeof req.query.category === "string" ? req.query.category.trim().toLowerCase() : "";
-    const search = typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    const category = typeof req.query.category === "string" ? req.query.category.trim() : "";
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || "20"), 10) || 20));
 
-    if (category && category !== "all") {
-      products = products.filter((p) => p.category.toLowerCase() === category);
-    }
-    if (search) {
-      products = products.filter(
-        (p) => p.name.toLowerCase().includes(search) || p.description.toLowerCase().includes(search)
-      );
-    }
-
-    const total = products.length;
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-    const start = (page - 1) * limit;
-    const items = products.slice(start, start + limit);
-
-    const result: PaginatedProducts = { items, total, page, limit, totalPages };
+    const result: PaginatedProducts = await productsDb.list({
+      category: category || undefined,
+      search: search || undefined,
+      page,
+      limit
+    });
     res.json(result);
   })
 );

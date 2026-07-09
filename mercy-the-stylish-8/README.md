@@ -52,6 +52,16 @@ npm run docker:dev:logs
 docker compose -f docker-compose.dev.yml up --build
 ```
 
+Rebuild the **web** image after frontend code changes (`docker compose -f docker-compose.dev.yml up --build web`). The web container serves a built bundle — not Vite dev — because Vite dev is unreliable on Windows Docker.
+
+For frontend hot reload on Windows, run the API in Docker and the app locally:
+
+```bash
+npm run docker:dev:down
+docker compose -f docker-compose.dev.yml up postgres main-server   # API + DB only
+npm run dev --prefix app                                           # Vite on your machine
+```
+
 ---
 
 ## Environment variables
@@ -117,6 +127,16 @@ npm run db:seed --prefix server
 
 **Products not showing / empty shop**
 - Re-seed: `npm run db:seed --prefix server` (with containers running).
+
+**White / blank page at http://localhost:5173**
+- Rebuild the web image: `docker compose -f docker-compose.dev.yml up --build web` (first start builds the frontend — can take ~30s).
+- Hard-refresh the browser (Ctrl+Shift+R).
+- For live frontend editing on Windows, skip the Docker web container and run `npm run dev --prefix app` locally while Postgres + API run in Docker.
+
+**Prisma error: `Argument "url" is missing` or CLI version 6.x**
+- This project uses **Prisma 7** (`url` lives in `prisma.config.ts`, not `schema.prisma`). An old Docker volume or global `npx prisma` can run Prisma 6 instead.
+- Reset Docker volumes and rebuild: `npm run docker:dev:reset`
+- For local commands, use `npm run db:generate --prefix server` (not bare `npx prisma`).
 
 **Google Sign-In or Stripe not working**
 - Fill in real keys in `server/.env` and `app/.env`, then restart: `npm run docker:dev:down && npm run docker:dev`.

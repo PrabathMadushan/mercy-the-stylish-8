@@ -35,11 +35,18 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-you@example.com}
-    volumes:
-      - ./server/src:/app/src
-      - ./server/prisma:/app/prisma
-      - ./server/prisma.config.ts:/app/prisma.config.ts
-      - server-node-modules:/app/node_modules
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,20 +61,12 @@ services:
       - path: ./app/.env
         required: false
     environment:
-      CHOKIDAR_USEPOLLING: "true"
       VITE_MAIN_SERVER_URL: http://localhost:4000
       VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       VITE_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
-    volumes:
-      - ./app/src:/app/src
-      - ./app/index.html:/app/index.html
-      - ./app/public:/app/public
-      - ./app/tailwind.config.js:/app/tailwind.config.js
-      - ./app/postcss.config.js:/app/postcss.config.js
-      - ./app/vite.config.ts:/app/vite.config.ts
     depends_on:
-      - main-server
+      main-server:
+        condition: service_healthy
 
 volumes:
   postgres-data:
-  server-node-modules:
