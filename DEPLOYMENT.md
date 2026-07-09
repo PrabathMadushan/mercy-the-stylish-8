@@ -14,28 +14,16 @@
 
 ## Local development
 
-### Option A — Docker (one command)
+For **Docker development** (recommended), see the full guide in [mercy-the-stylish-8/README.md](mercy-the-stylish-8/README.md).
 
-From `mercy-the-stylish-8/`:
+Quick start:
 
 ```bash
+cd mercy-the-stylish-8
 npm run docker:dev
 ```
 
-This starts **Postgres**, the **API** (port 4000, hot reload), and the **Vite frontend** (port 5173, hot reload).
-
-- Frontend: http://localhost:5173
-- API: http://localhost:4000
-
-On first run, `server/.env` and `app/.env` are created from `.env.example` if missing. Edit them with your Google OAuth and Stripe keys.
-
-Stop:
-
-```bash
-npm run docker:dev:down
-```
-
-### Option B — without Docker
+### Without Docker (manual)
 
 ```bash
 cd mercy-the-stylish-8
