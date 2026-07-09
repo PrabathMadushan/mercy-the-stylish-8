@@ -13,7 +13,7 @@ todos:
     status: completed
   - id: verify
     content: Run build:all and confirm docker:dev instructions are accurate
-    status: in_progress
+    status: completed
 isProject: false
 ---
 
